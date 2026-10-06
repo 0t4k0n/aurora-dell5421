@@ -1,4 +1,4 @@
 # Aurora Dell 5421
 
-Aurora Stable con initramfs dichiarativo per Dell Latitude 5421.
-L’initramfs viene generato durante la build dell’immagine, senza rigenerazione locale a ogni aggiornamento.
+Follows Aurora Stable with a declarative initramfs tailored to the Dell Latitude 5421.
+The initramfs is generated during the image build, without local regeneration on each update.
