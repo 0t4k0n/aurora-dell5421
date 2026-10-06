@@ -1,0 +1,5 @@
+*.key
+*.rpm
+*.img
+*.log
+inventory*.txt

@@ -1,0 +1,3 @@
+docker:
+  ghcr.io/0t4k0n/aurora-dell5421:
+    use-sigstore-attachments: true

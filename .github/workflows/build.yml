@@ -1,0 +1,65 @@
+name: Aurora Dell 5421
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  schedule:
+    - cron: '17 6 * * *'
+  workflow_dispatch:
+concurrency:
+  group: image-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  build:
+    runs-on: ubuntu-26.04
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - uses: ublue-os/remove-unwanted-software@695eb75bc387dbcd9685a8e72d23439d8686cba6
+      - name: Check inputs
+        run: |
+          bash -n build_files/*.sh
+          test -s cosign.pub
+          openssl pkey -pubin -in cosign.pub -noout
+      - name: Build
+        id: build
+        run: |
+          set -euo pipefail
+          image="ghcr.io/${GITHUB_REPOSITORY,,}"
+          sudo podman pull ghcr.io/ublue-os/aurora:stable
+          version=$(sudo podman image inspect ghcr.io/ublue-os/aurora:stable --format '{{ index .Labels "org.opencontainers.image.version" }}')
+          test -n "$version"
+          sudo podman build --pull=never --tag "$image:stable" --label "org.opencontainers.image.title=aurora-dell5421" --label "org.opencontainers.image.version=$version" --label "org.opencontainers.image.source=https://github.com/$GITHUB_REPOSITORY" .
+          echo "image=$image" >> "$GITHUB_OUTPUT"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+      - name: Publish
+        if: github.event_name != 'pull_request'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          IMAGE: ${{ steps.build.outputs.image }}
+          VERSION: ${{ steps.build.outputs.version }}
+        run: |
+          set -euo pipefail
+          printf '%s' "$GH_TOKEN" | sudo podman login ghcr.io --username "$GITHUB_ACTOR" --password-stdin
+          sudo podman push --digestfile /tmp/image.digest "$IMAGE:stable"
+          sudo podman push "$IMAGE:stable" "docker://$IMAGE:$VERSION"
+      - uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6
+        if: github.event_name != 'pull_request'
+        with:
+          cosign-release: v3.1.2
+      - name: Sign and verify
+        if: github.event_name != 'pull_request'
+        env:
+          COSIGN_PRIVATE_KEY: ${{ secrets.SIGNING_SECRET }}
+          COSIGN_PASSWORD: ${{ secrets.COSIGN_PASSWORD }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          IMAGE: ${{ steps.build.outputs.image }}
+        run: |
+          set -euo pipefail
+          cosign login ghcr.io -u "$GITHUB_ACTOR" -p "$GH_TOKEN"
+          digest=$(< /tmp/image.digest)
+          cosign sign -y --new-bundle-format=false --use-signing-config=false --key env://COSIGN_PRIVATE_KEY "$IMAGE@$digest"
+          cosign verify --key cosign.pub "$IMAGE@$digest"
