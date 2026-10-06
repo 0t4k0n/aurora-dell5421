@@ -6,7 +6,8 @@ rpm --import /etc/pki/rpm-gpg/RPM-GPG-KEY-chatgpt
 rpm --import /etc/pki/rpm-gpg/RPM-GPG-KEY-NordVPN
 
 # All RPM changes belong to the published image, never to a client-side layer.
-dnf5 install -y btrfs-assistant snapper nordvpn chatgpt
+# NordVPN recommends its GUI: defer that RPM until /opt is a real directory.
+dnf5 install -y --exclude=nordvpn-gui btrfs-assistant snapper nordvpn chatgpt
 if rpm -q sunshine >/dev/null 2>&1; then
     dnf5 remove --no-autoremove -y sunshine
 fi
