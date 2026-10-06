@@ -1,5 +1,6 @@
 #!/usr/bin/bash
-set -euo pipefail
+set -Eeuo pipefail
+trap 'printf "Initramfs failed at line %s: %s\n" "$LINENO" "$BASH_COMMAND" >&2' ERR
 
 mapfile -t kernels < <(find /usr/lib/modules -mindepth 1 -maxdepth 1 -type d -printf '%f\n')
 [[ ${#kernels[@]} -eq 1 ]] || { echo 'Expected one image kernel' >&2; exit 1; }

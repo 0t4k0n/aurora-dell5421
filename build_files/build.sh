@@ -1,5 +1,6 @@
 #!/usr/bin/bash
-set -euo pipefail
+set -Eeuo pipefail
+trap 'printf "Build failed at line %s: %s\n" "$LINENO" "$BASH_COMMAND" >&2' ERR
 
 cp -a /ctx/system_files/. /
 rpm --import /etc/pki/rpm-gpg/RPM-GPG-KEY-chatgpt
@@ -13,13 +14,17 @@ if rpm -q sunshine >/dev/null 2>&1; then
 fi
 
 # Preserve Aurora's mutable /opt layout; publish the GUI payload under /usr.
-test "$(readlink /opt)" = "var/opt"
+opt_target=$(readlink /opt)
+case "$opt_target" in
+    var/opt|/var/opt) ;;
+    *) echo "Unexpected /opt target: $opt_target" >&2; exit 1 ;;
+esac
 unlink /opt
 mkdir /opt
 dnf5 install -y nordvpn-gui
 mv /opt/nordvpn-gui /usr/lib/nordvpn-gui
 rmdir /opt
-ln -s var/opt /opt
+ln -s "$opt_target" /opt
 ln -sfn /usr/lib/nordvpn-gui/nordvpn-gui /usr/sbin/nordvpn-gui
 if [[ -d /var/lib/nordvpn/data ]]; then
     mkdir -p /usr/share/nordvpn
