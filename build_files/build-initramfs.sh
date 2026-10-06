@@ -15,20 +15,22 @@ modules=(nss-softokn bash systemd fips fips-crypto-policies
     systemd-ask-password systemd-battery-check systemd-cryptsetup systemd-initrd
     systemd-journald systemd-modules-load systemd-pcrphase systemd-sysctl
     systemd-tmpfiles systemd-udevd i18n drm plymouth ostree bootc systemd-sysusers
-    btrfs crypt dm fs-lib kernel-modules prefixdevname fido2 pcsc pkcs11 tpm2-tss
+    btrfs crypt dm fs-lib kernel-modules kernel-modules-extra prefixdevname fido2 pcsc pkcs11 tpm2-tss
     rootfs-block terminfo udev-rules dracut-systemd initqueue usrmount base
     memstrack shell-interpreter shutdown openssl)
 
-# Boot hardware, removable USB storage and console input. Dependencies come
-# from this image's kernel, never the GitHub runner. Built-in drivers need no file.
-seeds=(i915 nvme dm_crypt btrfs ext4 vfat erofs overlay tpm_tis
-    xhci_pci usb_storage uas sd_mod usbhid hid_generic atkbd i8042
-    i2c_hid_acpi hid_multitouch intel_lpss_pci pinctrl_tigerlake)
+# Keep the complete driver inventory of the working local initramfs.
+# Resolve dependencies against the image kernel, never against the CI runner.
+mapfile -t seeds < /ctx/initramfs-drivers.txt
+seeds+=(
+i915 nvme dm_crypt btrfs ext4 vfat erofs overlay tpm_tis
+xhci_pci usb_storage uas sd_mod usbhid hid_generic atkbd i8042
+i2c_hid_acpi hid_multitouch intel_lpss_pci pinctrl_tigerlake)
+mapfile -t firmware < /ctx/initramfs-firmware.txt
+for path in "${firmware[@]}"; do
+    [[ -f $path ]] || { echo "Missing reference firmware: $path" >&2; exit 1; }
+done
 declare -A allowed=()
-# Keep all kernel crypto implementations, including algorithms selected by LUKS.
-while IFS= read -r path; do
-    seeds+=("$(modinfo -F name "$path")")
-done < <(find "/usr/lib/modules/$kernel/kernel/crypto" "/usr/lib/modules/$kernel/kernel/arch/x86/crypto" -type f -name '*.ko*')
 # Preserve upstream preload requirements instead of causing modules-load errors.
 while IFS= read -r driver; do
     [[ -n $driver ]] || continue
@@ -56,7 +58,7 @@ DRACUT_NO_XATTR=1 dracut --force --reproducible --kver "$kernel" \
     --no-hostonly --no-hostonly-cmdline --no-hostonly-i18n \
     --modules "${modules[*]}" --drivers "${drivers[*]}" \
     --omit-drivers "${omit[*]}" \
-    --install /usr/lib/kbd/keymaps/legacy/i386/qwerty/it.map.gz --strip "$output"
+    --install "${firmware[*]} /usr/lib/kbd/keymaps/legacy/i386/qwerty/it.map.gz" --strip "$output"
 cp "$scratch/os-release" /usr/lib/os-release
 lsinitrd "$output" > "$scratch/list"
 lsinitrd -m "$output" > "$scratch/modules"
@@ -65,6 +67,9 @@ mkdir "$scratch/unpack"
 
 for module in "${modules[@]}"; do
     grep -Fxq "$module" "$scratch/modules"
+done
+for path in "${firmware[@]}"; do
+    [[ -f $scratch/unpack/${path#/} ]] || { echo "Firmware absent from initramfs: $path" >&2; exit 1; }
 done
 for driver in "${seeds[@]}"; do
     path=$(modinfo -k "$kernel" -n "$driver")

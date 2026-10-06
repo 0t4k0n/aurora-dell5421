@@ -7,6 +7,8 @@ Includes Btrfs Assistant, Snapper, NordVPN/GUI and ChatGPT. Removes Sunshine;
 otherwise preserves Aurora. No personal data, disk UUIDs or TPM secrets are included.
 
 The initramfs is built and checked in GitHub Actions, not regenerated on the PC.
+Its driver and firmware manifests preserve the working Dell initramfs inventory;
+host-specific files and identifiers are deliberately excluded.
 Builds follow Aurora Stable and retain its version. Published as
 `ghcr.io/0t4k0n/aurora-dell5421:stable`.
 
